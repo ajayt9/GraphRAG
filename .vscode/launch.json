@@ -1,0 +1,22 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Streamlit: src/app.py",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "streamlit",
+            "args": ["run", "${workspaceFolder}/src/app.py", "--server.headless=true"],
+            "justMyCode": true
+        },
+        {
+            "name": "Python: src/cli.py",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.cli",
+            "args": ["--stats"],
+            "cwd": "${workspaceFolder}",
+            "justMyCode": true
+        }
+    ]
+}

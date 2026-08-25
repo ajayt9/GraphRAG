@@ -1,0 +1,42 @@
+%%{init: {"theme": "default", "flowchart": {"curve": "basis"}} }%%
+flowchart TB
+    DOCS["data/documents/*.txt<br/>8 source documents"]
+
+    subgraph INDEXING["Index build - src/pipeline.py"]
+        direction TB
+        EXTRACT["src/extraction.py<br/>Entity & relation extraction"]
+        GRAPH["src/graph_builder.py<br/>Graph build + community detection"]
+        SUMM["src/summarizer.py<br/>Community summaries"]
+        EMB["src/embeddings.py<br/>TF-IDF indexes"]
+
+        EXTRACT --> GRAPH --> SUMM --> EMB
+    end
+
+    subgraph QUERY["Query time - src/query_engine.py"]
+        direction TB
+        RETRIEVE["retrieve()<br/>Global + local search"]
+        CONTEXT["Assemble evidence context"]
+        ANSWER["Answer synthesis"]
+
+        RETRIEVE --> CONTEXT --> ANSWER
+    end
+
+    AZURE[["Azure OpenAI<br/>src/llm.py"]]
+
+    UI["src/app.py<br/>Streamlit UI"]
+    CLI["src/cli.py<br/>Command line"]
+
+    DOCS --> EXTRACT
+    EMB --> RETRIEVE
+    SUMM -. chat_complete .-> AZURE
+    ANSWER -. chat_complete .-> AZURE
+
+    UI --> QUERY
+    CLI --> QUERY
+    UI --> INDEXING
+    CLI --> INDEXING
+
+    classDef azure fill:#e6f2ff,stroke:#2b6cb0,stroke-width:2px;
+    classDef entry fill:#fff3cd,stroke:#b58900,stroke-width:2px;
+    class AZURE azure;
+    class UI,CLI entry;
