@@ -17,7 +17,7 @@ import streamlit.components.v1 as components
 from pyvis.network import Network
 
 from src.llm import is_llm_available, chat_complete
-from src.pipeline import DEFAULT_DATA_DIR, GraphRAGIndex, build_index
+from src.pipeline import GraphRAGIndex, build_index
 from src.query_engine import answer
 
 st.set_page_config(page_title="GraphRAG Demo", layout="wide")
@@ -56,6 +56,35 @@ def save_uploaded_documents(files) -> str:
             with open(os.path.join(upload_dir, name), "wb") as out:
                 out.write(f.getvalue())
     return upload_dir
+
+
+def generate_example_questions(index: GraphRAGIndex) -> list[str]:
+    """Derive example questions from whatever documents were actually loaded,
+    instead of hard-coding text tied to one sample scenario."""
+    questions: list[str] = []
+
+    nodes_by_mentions = sorted(
+        index.graph.nodes(data=True), key=lambda item: item[1].get("mention_count", 0), reverse=True
+    )
+    top_entities = [name for name, _ in nodes_by_mentions[:5]]
+    if top_entities:
+        questions.append(f"Who is {top_entities[0]} and what role do they play?")
+
+    edges_by_weight = sorted(
+        index.graph.edges(data=True), key=lambda item: item[2].get("weight", 0), reverse=True
+    )
+    if edges_by_weight:
+        a, b, _ = edges_by_weight[0]
+        questions.append(f"What is the relationship between {a} and {b}?")
+
+    if len(top_entities) > 1:
+        questions.append(f"What role did {top_entities[1]} play in the events described?")
+
+    summaries = list(index.community_summaries.values())
+    if summaries:
+        questions.append(f"Summarize the key events involving {summaries[0].title}.")
+
+    return questions
 
 
 def render_graph(index: GraphRAGIndex, color_by: str) -> str:
@@ -102,39 +131,48 @@ def main() -> None:
         )
         st.stop()
 
+    data_dir = None
+    extraction_label = "LLM (Azure OpenAI)"
+    retrieval_label = "Azure OpenAI embeddings"
+
     with st.sidebar:
         st.header("Documents")
         uploaded_files = st.file_uploader(
-            "Upload .txt documents (leave empty to use the sample dataset)",
+            "Upload .txt documents to build the knowledge graph",
             type=["txt"],
             accept_multiple_files=True,
         )
+
         if uploaded_files:
             data_dir = save_uploaded_documents(uploaded_files)
             st.caption(f"Using {len(uploaded_files)} uploaded document(s).")
-        else:
-            data_dir = DEFAULT_DATA_DIR
-            st.caption("Using sample dataset (The Solace Initiative).")
 
-        st.header("Extraction method")
-        extraction_label = st.radio(
-            "Entity/relation extraction",
-            ["Regex (heuristic)", "LLM (Azure OpenAI)"],
-            help=(
-                "Regex: fast, offline capitalization/keyword heuristics. "
-                "LLM: calls Azure OpenAI once per document to extract entities and relations."
-            ),
-        )
-        st.header("Retrieval method")
-        retrieval_label = st.radio(
-            "Vector retrieval",
-            ["TF-IDF", "Azure OpenAI embeddings"],
-            help=(
-                "TF-IDF: offline keyword-overlap similarity (scikit-learn). "
-                "Azure OpenAI embeddings: semantic similarity using your "
-                "AZURE_OPENAI_EMBEDDING_DEPLOYMENT (e.g. text-embedding-3-small)."
-            ),
-        )
+            st.header("Extraction method")
+            extraction_label = st.radio(
+                "Entity/relation extraction",
+                ["Regex (heuristic)", "LLM (Azure OpenAI)"],
+                index=1,
+                help=(
+                    "Regex: fast, offline capitalization/keyword heuristics. "
+                    "LLM: calls Azure OpenAI once per document to extract entities and relations."
+                ),
+            )
+            st.header("Retrieval method")
+            retrieval_label = st.radio(
+                "Vector retrieval",
+                ["TF-IDF", "Azure OpenAI embeddings"],
+                index=1,
+                help=(
+                    "TF-IDF: offline keyword-overlap similarity (scikit-learn). "
+                    "Azure OpenAI embeddings: semantic similarity using your "
+                    "AZURE_OPENAI_EMBEDDING_DEPLOYMENT (e.g. text-embedding-3-small)."
+                ),
+            )
+
+    if data_dir is None:
+        st.info("Upload one or more .txt documents in the sidebar to build the knowledge graph.")
+        st.stop()
+
     extraction_method = "llm" if extraction_label.startswith("LLM") else "regex"
     retrieval_method = "azure_embedding" if retrieval_label.startswith("Azure") else "tfidf"
 
@@ -160,19 +198,16 @@ def main() -> None:
             except Exception as e:
                 st.error(f"LLM call failed: {type(e).__name__}: {e}")
 
-    tab_ask, tab_graph, tab_communities = st.tabs(["Ask a question", "Explore graph", "Communities"])
+    tab_graph, tab_ask, tab_communities = st.tabs(["Explore graph", "Ask a question", "Communities"])
 
     with tab_ask:
         st.subheader("Ask a question about the dataset")
-        example_questions = [
-            "Who leaked the Project Chimera documents and why?",
-            "What is the relationship between Meridian Dynamics and the Obsidian Group?",
-            "What role did the Global Energy Council play after the Black Harbor Leak?",
-            "How is The Accord connected to Project Chimera?",
-        ]
+        example_questions = generate_example_questions(index)
         chosen = st.selectbox("Example questions", ["(type your own below)"] + example_questions)
         default_text = "" if chosen == "(type your own below)" else chosen
-        query = st.text_input("Your question", value=default_text)
+        query = st.text_input(
+            "Your question", value=default_text, placeholder="Ask anything about the uploaded documents..."
+        )
 
         if st.button("Ask", type="primary") and query.strip():
             with st.spinner("Retrieving from graph + generating answer..."):

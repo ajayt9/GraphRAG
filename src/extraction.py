@@ -56,6 +56,7 @@ _EVENT_PREFIXES = ("Project", "Operation", "The Accord", "The Black Harbor Leak"
 # already know about real-world place names.
 _KNOWN_PLACES = {
     "Geneva", "Singapore", "Norway", "Lagos", "Europe", "Black Harbor Facility",
+    "Gujarat", "Kutch", "Ahmedabad", "Mumbai", "Bengaluru", "Delhi", "Rajasthan", "India",
 }
 
 _TITLES = ("Dr.", "Mr.", "Ms.", "Mrs.", "Chief", "CEO")
