@@ -35,6 +35,10 @@ _COMMUNITY_PALETTE = [
     "#911eb4", "#46f0f0", "#f032e6", "#bcf60c", "#fabebe",
 ]
 
+SAMPLE_DATA_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "documents"
+)
+
 
 @st.cache_resource(show_spinner="Building knowledge graph from documents...")
 def get_index(data_dir: str, extraction_method: str, retrieval_method: str) -> GraphRAGIndex:
@@ -142,11 +146,18 @@ def main() -> None:
             type=["txt"],
             accept_multiple_files=True,
         )
+        if st.button("Load Sample Data"):
+            st.session_state["use_sample_data"] = True
 
         if uploaded_files:
+            st.session_state["use_sample_data"] = False
             data_dir = save_uploaded_documents(uploaded_files)
             st.caption(f"Using {len(uploaded_files)} uploaded document(s).")
+        elif st.session_state.get("use_sample_data"):
+            data_dir = SAMPLE_DATA_DIR
+            st.caption(f"Using sample dataset ({len(os.listdir(SAMPLE_DATA_DIR))} document(s)).")
 
+        if data_dir is not None:
             st.header("Extraction method")
             extraction_label = st.radio(
                 "Entity/relation extraction",
@@ -170,7 +181,10 @@ def main() -> None:
             )
 
     if data_dir is None:
-        st.info("Upload one or more .txt documents in the sidebar to build the knowledge graph.")
+        st.info(
+            "Upload one or more .txt documents in the sidebar, or click "
+            "'Load Sample Data' to try the demo with the built-in sample dataset."
+        )
         st.stop()
 
     extraction_method = "llm" if extraction_label.startswith("LLM") else "regex"
