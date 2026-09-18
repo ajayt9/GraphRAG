@@ -6,9 +6,11 @@ Run with:
 from __future__ import annotations
 
 import hashlib
+import io
 import os
 import sys
 import tempfile
+import zipfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -60,6 +62,16 @@ def save_uploaded_documents(files) -> str:
             with open(os.path.join(upload_dir, name), "wb") as out:
                 out.write(f.getvalue())
     return upload_dir
+
+
+def build_sample_data_zip(data_dir: str) -> bytes:
+    """Bundles all .txt files in data_dir into an in-memory zip for download."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name in sorted(os.listdir(data_dir)):
+            if name.endswith(".txt"):
+                zf.write(os.path.join(data_dir, name), arcname=name)
+    return buffer.getvalue()
 
 
 def generate_example_questions(index: GraphRAGIndex) -> list[str]:
@@ -148,6 +160,21 @@ def main() -> None:
         )
         if st.button("Load Sample Data"):
             st.session_state["use_sample_data"] = True
+
+        with st.expander("View / download sample documents"):
+            st.download_button(
+                "Download all sample documents (.zip)",
+                data=build_sample_data_zip(SAMPLE_DATA_DIR),
+                file_name="graphrag_sample_documents.zip",
+                mime="application/zip",
+            )
+            for name in sorted(os.listdir(SAMPLE_DATA_DIR)):
+                if not name.endswith(".txt"):
+                    continue
+                with open(os.path.join(SAMPLE_DATA_DIR, name), "rb") as f:
+                    st.download_button(
+                        name, data=f.read(), file_name=name, mime="text/plain", key=f"dl_{name}"
+                    )
 
         if uploaded_files:
             st.session_state["use_sample_data"] = False
